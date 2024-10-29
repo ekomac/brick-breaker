@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brick Breaker</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background-color: #202020;
+            display: grid;
+            place-content: center;
+            height: 100vh;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        main {
+            display: flex;
+            flex-direction: column;
+        }
+
+        canvas {
+            border: 1px solid white;
+        }
+
+        div.scores {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        span {
+            color: white;
+            font-size: 1.25rem;
+        }
+    </style>
+
+    <script type="module">
+        const $ = (selector) => document.querySelector(selector)
+        const $$ = (selector) => document.querySelectorAll(selector)
+
+        const $canvas = $('#game-canvas')
+        const ctx = $canvas.getContext('2d')
+
+        const BOTTOM_PADDING = 10
+        const FLOOR_WIDTH = 150
+        const FLOOR_HEIGHT = 20
+        const INITIAL_FLOOR_X = ($canvas.width / 2) - (FLOOR_WIDTH / 2)
+        const INITIAL_FLOOR_Y = $canvas.height - FLOOR_HEIGHT - BOTTOM_PADDING
+        const BALL_RADIUS = 10
+        const INITIAL_CIRCLE_X = $canvas.width / 2
+        const INITIAL_CIRCLE_Y = INITIAL_FLOOR_Y - BALL_RADIUS
+        const INITIAL_BALL_SPEED = 4
+        const INITIAL_PADDLE_SPEED = 10
+        const MIDDLE_TITTLE_FONT_SIZE = 50
+
+        const MODES = {
+            NOT_STARTED: -1,
+            PLAYING: 0,
+            PAUSED: 1,
+            GAME_OVER: 2,
+            LIFE_LOST: 3,
+        }
+
+        const INITIAL_LIVES = 3
+
+        const DIRECTIONS = {
+            TOP: 1,
+            RIGHT: 2,
+            BOTTOM: 3,
+            LEFT: 4,
+        }
+
+        const LIMIT_LINE = $canvas.height - BOTTOM_PADDING - FLOOR_HEIGHT
+
+        const BRICKS_COLUMNS = 10
+        const BRICKS_ROWS = 3
+        const BRICKS_WIDTH = $canvas.width / BRICKS_COLUMNS
+        const BRICKS_HEIGHT = 20
+
+        let paddle, ball, speed, mode, lives, ballDirection, paddleSpeed, bricks
+        let shouldMove = false
+        const COLORS = [
+            ["#FF4365", "#CC3651"],
+            ["#39B54A", "#2D913B"],
+            ["#0086FF", "#006ACC"],
+            ["#8A2BE2", "#6E22B5"],
+            ["#FF8C42", "#CC7035"],
+            ["#40E0D0", "#33B3A6"],
+            ["#FF69B4", "#CC5490"],
+            ["#FFD700", "#CCB100"]
+        ]
+
+        function draw() {
+            if (mode === MODES.GAME_OVER) {
+                if (shouldMove) {
+                    moveBallX()
+                    moveBallY()
+                }
+                return drawGameOver()
+            }
+
+            if (mode === MODES.LIFE_LOST) {
+                if (shouldMove) {
+                    moveBallX()
+                    moveBallY()
+                }
+                return drawLifeLost()
+            }
+
+            if (mode === MODES.PLAYING) {
+                if (shouldMove) {
+                    moveBall()
+                }
+                movePaddle()
+            }
+            drawBackground()
+            drawPaddle()
+            drawBall()
+            drawBricks()
+            // drawLineFromBall()
+            window.requestAnimationFrame(draw)
+        }
+
+        // function drawLineFromBall() {
+        //     ctx.beginPath()
+        //     ctx.moveTo(ball.x, ball.y)
+        //     if (ball.hDir == DIRECTIONS.RIGHT) {
+        //         ctx.lineTo(ball.x + $canvas.height, ball.y + $canvas.height)
+        //     } else {
+        //         ctx.lineTo(ball.x - $canvas.height, ball.y + $canvas.height)
+        //     }
+        //     ctx.strokeStyle = 'white'
+        //     ctx.lineCap = "round"
+        //     ctx.stroke()
+        // }
+
+        function drawBackground() {
+            ctx.fillStyle = "rgb(0, 0, 0)"
+            ctx.fillRect(0, 0, $canvas.width, $canvas.height)
+        }
+
+        function drawPaddle() {
+            ctx.fillStyle = "#ffffff"
+            const { width, height, x, y } = paddle
+            ctx.fillRect(x, y, width, height)
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
+            ctx.fillStyle = 'white'
+            ctx.fill()
+            ctx.closePath()
+
+            ctx.beginPath()
+            ctx.arc(ball.x, ball.y, 2, 0, Math.PI * 2)
+            ctx.fillStyle = 'red'
+            ctx.fill()
+            ctx.closePath()
+        }
+
+        function drawGameOver() {
+            const text = "Game Over"
+            ctx.fillStyle = "white"
+            ctx.font = `${MIDDLE_TITTLE_FONT_SIZE}px serif`
+            ctx.textAlign = "center"
+            ctx.textBaseline = "middle"
+            ctx.fillText(text, $canvas.width / 2, $canvas.height / 2)
+        }
+
+        function drawLifeLost() {
+            const text = "Vidas restantes: " + lives
+            ctx.fillStyle = "white"
+            ctx.font = `${MIDDLE_TITTLE_FONT_SIZE}px serif`
+            ctx.textAlign = "center"
+            ctx.textBaseline = "middle"
+            ctx.fillText(text, $canvas.width / 2, $canvas.height / 2)
+        }
+
+        function drawBricks() {
+            for (const row of bricks) {
+                for (const brick of row) {
+                    if (brick === null) continue
+                    const { width, height, x, y, bg, stroke } = brick
+                    ctx.fillStyle = bg
+                    ctx.fillRect(x, y, width, height)
+                    ctx.strokeStyle = stroke
+                    ctx.strokeRect(x, y, width, height)
+                }
+            }
+        }
+
+        function movePaddle() {
+            if (paddleSpeed > 0 && paddle.x + paddle.width > $canvas.width) {
+                return
+            } else if (paddleSpeed < 0 && paddle.x < 0) {
+                return
+            }
+            paddle.x += paddleSpeed
+        }
+
+        function loseLife() {
+            lives -= 1
+            if (lives === 0) {
+                mode = MODES.GAME_OVER
+            } else {
+                mode = MODES.LIFE_LOST
+            }
+        }
+
+        function isBallInHorizontalPaddleRange() {
+            return ball.x >= paddle.x && ball.x <= (paddle.x + paddle.width)
+        }
+
+        function isBallInVerticalPaddleRange() {
+            return ball.y >= paddle.y && ball.y <= (paddle.y + paddle.height)
+        }
+
+        function isHypothenuseSameAsRadius() {
+            const isHittingFromTopLeft = (ball.y + ball.radius) >= paddle.y
+                && (ball.x + ball.radius) >= paddle.x
+            // && (ball.y <= paddle.y)
+
+            const isHittingFromTopRight = (ball.y + ball.radius) >= paddle.y
+                && ball.x <= paddle.x
+                && (ball.y <= paddle.y)
+
+            const hLeg = (ball.x < paddle.x)
+                ? (paddle.x - ball.x)
+                : (ball.x - (paddle.x + paddle.width))
+
+            const vLeg = paddle.y - ball.y
+
+            return Math.hypot(hLeg, vLeg) <= ball.radius
+        }
+
+        function moveBall() {
+            if (isHypothenuseSameAsRadius()) {
+                ball.vDir = DIRECTIONS.TOP
+                if (ball.hDir == DIRECTIONS.RIGHT) {
+                    ball.hDir = DIRECTIONS.LEFT
+                } else if (ball.hDir == DIRECTIONS.LEFT) {
+                    ball.hDir = DIRECTIONS.RIGHT
+                }
+            }
+
+            const collisions = getBrickCollisions()
+            if (collisions.length == 2) {
+                revertHorizontalDirection()
+                revertVerticalDirection()
+            } else if (collisions.length == 1) {
+                const { direction } = collisions[0]
+                if (direction == DIRECTIONS.BOTTOM) {
+                    ball.vDir = DIRECTIONS.TOP
+                } else if (direction == DIRECTIONS.TOP) {
+                    ball.vDir = DIRECTIONS.BOTTOM
+                } else if (direction == DIRECTIONS.RIGHT) {
+                    ball.hDir = DIRECTIONS.LEFT
+                } else if (direction == DIRECTIONS.LEFT) {
+                    ball.hDir = DIRECTIONS.RIGHT
+                }
+            } else if (collisions.length == 0) {
+                moveBallX(isHypothenuseSameAsRadius)
+                moveBallY(isHypothenuseSameAsRadius)
+                return
+            }
+
+            for (const { brickRow, brickCol } of collisions) {
+                bricks[brickRow][brickCol] = null
+            }
+        }
+
+        function getOppositeDirection(direction) {
+            if (direction == DIRECTIONS.BOTTOM) {
+                return DIRECTIONS.TOP
+            } else if (direction == DIRECTIONS.TOP) {
+                return DIRECTIONS.BOTTOM
+            } else if (direction == DIRECTIONS.RIGHT) {
+                return DIRECTIONS.LEFT
+            } else if (direction == DIRECTIONS.LEFT) {
+                return DIRECTIONS.RIGHT
+            }
+            throw new Error(`Invalid direction value: ${direction}`)
+        }
+
+        function revertHorizontalDirection() {
+            ball.hDir = getOppositeDirection(ball.hDir)
+        }
+
+        function revertVerticalDirection() {
+            ball.vDir = getOppositeDirection(ball.vDir)
+        }
+
+        function getBrickCollisions() {
+            let collisions = []
+            for (let i = 0; i < bricks.length; i++) {
+                const row = bricks[i];
+                for (let j = 0; j < row.length; j++) {
+                    const brick = row[j];
+                    if (brick == null) continue
+
+                    const ballCollidesFromLeft = ball.hDir == DIRECTIONS.LEFT
+                        && ball.x - ball.radius <= brick.right
+                        && brick.right >= (ball.x - ball.radius - speed)
+                        && ball.y >= brick.top
+                        && ball.y <= brick.bottom
+                    if (ballCollidesFromLeft) {
+                        collisions.push({
+                            direction: DIRECTIONS.LEFT,
+                            brickRow: i,
+                            brickCol: j
+                        })
+                        continue
+                    }
+
+                    const ballCollidesFromRight = ball.hDir == DIRECTIONS.RIGHT
+                        && brick.left <= (ball.x + ball.radius + speed)
+                        && ball.y >= brick.top
+                        && ball.y <= brick.bottom
+                    if (ballCollidesFromRight) {
+                        collisions.push({
+                            direction: DIRECTIONS.RIGHT,
+                            brickRow: i,
+                            brickCol: j
+                        })
+                        continue
+                    }
+
+                    const ballCollidesFromTop = ball.vDir == DIRECTIONS.TOP
+                        && brick.bottom <= (ball.y - ball.radius - speed)
+                        && ball.x <= brick.right
+                        && ball.x >= brick.left
+                    if (ballCollidesFromTop) {
+                        collisions.push({
+                            direction: DIRECTIONS.TOP,
+                            brickRow: i,
+                            brickCol: j
+                        })
+                        continue
+                    }
+
+                    const ballCollidesFromBottom = ball.vDir == DIRECTIONS.BOTTOM
+                        && brick.top >= (ball.y + ball.radius + speed)
+                        && ball.x <= brick.right
+                        && ball.x >= brick.left
+                    if (ballCollidesFromBottom) {
+                        collisions.push({
+                            direction: DIRECTIONS.BOTTOM,
+                            brickRow: i,
+                            brickCol: j
+                        })
+                        continue
+                    }
+                }
+            }
+            return collisions
+        }
+
+        function moveBallX() {
+            const isInBricksZone = ball.y - ball.radius <= BRICKS_ROWS * BRICKS_HEIGHT
+            const { ballRightX, ballLeftX } = getEverySide()
+
+            if (ballRightX == paddle.x && isBallInVerticalPaddleRange()) {
+                ball.hDir = DIRECTIONS.LEFT
+            }
+
+            if (ballLeftX == paddle.x + paddle.width && isBallInVerticalPaddleRange()) {
+                ball.hDir = DIRECTIONS.RIGHT
+            }
+
+            let hMovement = speed
+            if (ball.hDir === DIRECTIONS.RIGHT) {
+                let collidingBrickIndex = bricks.findIndex(({ top, bottom, left }) => {
+                    return ball.y >= top && ball.y <= bottom && (ball.x + speed) > left
+                })
+                if (ball.x + speed > $canvas.width || collidingBrickIndex != -1) {
+                    hMovement = 0
+                }
+
+                if (collidingBrickIndex != -1) {
+                    bricks[collidingBrickIndex] = null
+                }
+
+                ball.x += hMovement
+            } else if (ball.hDir === DIRECTIONS.LEFT) {
+                ball.x -= (ball.x - speed < 0 ? 0 : speed)
+            }
+
+            if (ball.x + BALL_RADIUS > $canvas.width) {
+                ball.hDir = DIRECTIONS.LEFT
+            } else if (ball.x - BALL_RADIUS < 0) {
+                ball.hDir = DIRECTIONS.RIGHT
+            }
+        }
+
+        function moveBallY() {
+            const isInBricksZone = ball.y - ball.radius <= BRICKS_ROWS * BRICKS_HEIGHT
+            const { ballBottomY, ballTopY } = getEverySide()
+
+            if (ballBottomY == paddle.y && isBallInHorizontalPaddleRange()) {
+                ball.vDir = DIRECTIONS.TOP
+            }
+
+            if (ballTopY == paddle.y + paddle.height && isBallInHorizontalPaddleRange()) {
+                ball.vDir = DIRECTIONS.BOTTOM
+            }
+
+            if (ball.y - BALL_RADIUS > $canvas.height) return console.log("ball is out")
+            if (ball.x + BALL_RADIUS < 0) return console.log("ball is out")
+            if (ball.x - BALL_RADIUS > $canvas.width) return console.log("ball is out")
+
+            if (ball.vDir === DIRECTIONS.TOP) {
+                ball.y -= (ball.y - speed < 0) ? 0 : speed
+            } else if (ball.vDir === DIRECTIONS.BOTTOM) {
+                ball.y += speed // ball.y + speed > $canvas.height ? $canvas.height : speed
+            }
+
+            if (ball.y - BALL_RADIUS < 0) {
+                ball.vDir = DIRECTIONS.BOTTOM
+            }
+        }
+
+        document.addEventListener('keydown', () => {
+            if (event.key === "ArrowRight") {
+                if (paddle.x + paddle.width > $canvas.width) return
+                paddleSpeed = INITIAL_PADDLE_SPEED
+
+                if (mode === MODES.NOT_STARTED) {
+                    paddle.x += paddleSpeed
+                    ball.x += paddleSpeed
+                }
+            }
+            if (event.key === "ArrowLeft") {
+                if (paddle.x <= 0) return
+                paddleSpeed = -INITIAL_PADDLE_SPEED
+
+                if (mode === MODES.NOT_STARTED) {
+                    paddle.x += paddleSpeed
+                    ball.x += paddleSpeed
+                }
+            }
+            if (event.key === "a") {
+                shouldMove = true
+            }
+            if (event.key === " ") {
+                if (mode === MODES.NOT_STARTED) {
+                    mode = MODES.PLAYING
+                    return
+                }
+                if (mode === MODES.LIFE_LOST) {
+                    laodInitialState(false)
+                    draw()
+                    return
+                }
+            }
+        })
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' && paddleSpeed != 0) {
+                paddleSpeed = 0
+            }
+            if (e.key === 'ArrowRight' && paddleSpeed != 0) {
+                paddleSpeed = 0
+            }
+            if (event.key === "a") {
+                shouldMove = false
+            }
+        });
+
+        function getEverySide() {
+            const [ballBottomX, ballBottomY] = [ball.x, ball.y + BALL_RADIUS]
+            const [ballTopX, ballTopY] = [ball.x, ball.y - BALL_RADIUS]
+            const [ballRightX, ballRightY] = [ball.x + BALL_RADIUS, ball.y]
+            const [ballLeftX, ballLeftY] = [ball.x - BALL_RADIUS, ball.y]
+            const paddleBottomY = paddle.y + paddle.height
+            const paddleTopY = paddle.y - paddle.height
+            const paddleRightX = paddle.x + paddle.width
+            const paddleLeftX = paddle.x - paddle.width
+
+            return {
+                ballBottomX, ballBottomY,
+                ballTopX, ballTopY,
+                ballRightX, ballRightY,
+                ballLeftX, ballLeftY,
+                paddleBottomY,
+                paddleTopY,
+                paddleRightX,
+                paddleLeftX
+            }
+        }
+
+        function laodInitialState(resetLives = true) {
+            mode = MODES.NOT_STARTED
+
+            paddle = {
+                width: FLOOR_WIDTH,
+                height: FLOOR_HEIGHT,
+                x: INITIAL_FLOOR_X,
+                y: INITIAL_FLOOR_Y,
+            }
+
+            ball = {
+                x: INITIAL_CIRCLE_X,
+                y: INITIAL_CIRCLE_Y,
+                vDir: DIRECTIONS.TOP,
+                hDir: DIRECTIONS.RIGHT,
+                radius: BALL_RADIUS
+            }
+
+            bricks = []
+            let lastColor, randomBg, randomStroke
+            for (let i = 0; i < BRICKS_ROWS; i++) {
+                for (let j = 0; j < BRICKS_COLUMNS; j++) {
+                    while (randomBg === lastColor) {
+                        const randomTuple = COLORS.sort(() => Math.random() - 0.5)[0];
+                        randomBg = randomTuple[0]
+                        randomStroke = randomTuple[1]
+                    }
+                    lastColor = randomBg
+                    const brick = {
+                        x: j * BRICKS_WIDTH,
+                        y: i * BRICKS_HEIGHT,
+                        width: BRICKS_WIDTH,
+                        height: BRICKS_HEIGHT,
+                        bg: randomBg,
+                        stroke: randomStroke,
+                        left: j * BRICKS_WIDTH + BRICKS_WIDTH,
+                        right: j * BRICKS_WIDTH,
+                        top: i * BRICKS_HEIGHT,
+                        bottom: i * BRICKS_HEIGHT + BRICKS_HEIGHT,
+                    }
+                    bricks.push(brick)
+                }
+            }
+
+            console.log(bricks)
+
+            speed = INITIAL_BALL_SPEED
+            paddleSpeed = 0
+
+            if (resetLives) {
+                lives = INITIAL_LIVES
+            }
+        }
+
+        function reset() {
+            laodInitialState()
+            draw()
+        }
+
+        reset()
+    </script>
+</head>
+
+<body>
+    <main>
+        <canvas id="game-canvas" width="800" height="600"></canvas>
+        <div class="scores">
+            <span id="score"></span>
+            <span id="highscore"></span>
+        </div>
+    </main>
+</body>
+
+</html>
