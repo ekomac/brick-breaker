@@ -187,15 +187,13 @@
         }
 
         function drawBricks() {
-            for (const row of bricks) {
-                for (const brick of row) {
-                    if (brick === null) continue
-                    const { width, height, x, y, bg, stroke } = brick
-                    ctx.fillStyle = bg
-                    ctx.fillRect(x, y, width, height)
-                    ctx.strokeStyle = stroke
-                    ctx.strokeRect(x, y, width, height)
-                }
+            for (const brick of bricks) {
+                if (brick === null) continue
+                const { width, height, x, y, bg, stroke } = brick
+                ctx.fillStyle = bg
+                ctx.fillRect(x, y, width, height)
+                ctx.strokeStyle = stroke
+                ctx.strokeRect(x, y, width, height)
             }
         }
 
@@ -303,63 +301,56 @@
         function getBrickCollisions() {
             let collisions = []
             for (let i = 0; i < bricks.length; i++) {
-                const row = bricks[i];
-                for (let j = 0; j < row.length; j++) {
-                    const brick = row[j];
-                    if (brick == null) continue
+                const brick = bricks[i];
+                if (brick == null) continue
 
-                    const ballCollidesFromLeft = ball.hDir == DIRECTIONS.LEFT
-                        && ball.x - ball.radius <= brick.right
-                        && brick.right >= (ball.x - ball.radius - speed)
-                        && ball.y >= brick.top
-                        && ball.y <= brick.bottom
-                    if (ballCollidesFromLeft) {
-                        collisions.push({
-                            direction: DIRECTIONS.LEFT,
-                            brickRow: i,
-                            brickCol: j
-                        })
-                        continue
-                    }
+                const ballCollidesFromLeft = ball.hDir == DIRECTIONS.LEFT
+                    && ball.x - ball.radius <= brick.right
+                    && brick.right >= (ball.x - ball.radius - speed)
+                    && ball.y >= brick.top
+                    && ball.y <= brick.bottom
+                if (ballCollidesFromLeft) {
+                    collisions.push({
+                        direction: DIRECTIONS.LEFT,
+                        brickIndex: i,
+                    })
+                    continue
+                }
 
-                    const ballCollidesFromRight = ball.hDir == DIRECTIONS.RIGHT
-                        && brick.left <= (ball.x + ball.radius + speed)
-                        && ball.y >= brick.top
-                        && ball.y <= brick.bottom
-                    if (ballCollidesFromRight) {
-                        collisions.push({
-                            direction: DIRECTIONS.RIGHT,
-                            brickRow: i,
-                            brickCol: j
-                        })
-                        continue
-                    }
+                const ballCollidesFromRight = ball.hDir == DIRECTIONS.RIGHT
+                    && brick.left <= (ball.x + ball.radius + speed)
+                    && ball.y >= brick.top
+                    && ball.y <= brick.bottom
+                if (ballCollidesFromRight) {
+                    collisions.push({
+                        direction: DIRECTIONS.RIGHT,
+                        brickIndex: i,
+                    })
+                    continue
+                }
 
-                    const ballCollidesFromTop = ball.vDir == DIRECTIONS.TOP
-                        && brick.bottom <= (ball.y - ball.radius - speed)
-                        && ball.x <= brick.right
-                        && ball.x >= brick.left
-                    if (ballCollidesFromTop) {
-                        collisions.push({
-                            direction: DIRECTIONS.TOP,
-                            brickRow: i,
-                            brickCol: j
-                        })
-                        continue
-                    }
+                const ballCollidesFromTop = ball.vDir == DIRECTIONS.TOP
+                    && brick.bottom <= (ball.y - ball.radius - speed)
+                    && ball.x <= brick.right
+                    && ball.x >= brick.left
+                if (ballCollidesFromTop) {
+                    collisions.push({
+                        direction: DIRECTIONS.TOP,
+                        brickIndex: i,
+                    })
+                    continue
+                }
 
-                    const ballCollidesFromBottom = ball.vDir == DIRECTIONS.BOTTOM
-                        && brick.top >= (ball.y + ball.radius + speed)
-                        && ball.x <= brick.right
-                        && ball.x >= brick.left
-                    if (ballCollidesFromBottom) {
-                        collisions.push({
-                            direction: DIRECTIONS.BOTTOM,
-                            brickRow: i,
-                            brickCol: j
-                        })
-                        continue
-                    }
+                const ballCollidesFromBottom = ball.vDir == DIRECTIONS.BOTTOM
+                    && brick.top >= (ball.y + ball.radius + speed)
+                    && ball.x <= brick.right
+                    && ball.x >= brick.left
+                if (ballCollidesFromBottom) {
+                    collisions.push({
+                        direction: DIRECTIONS.BOTTOM,
+                        brickIndex: i,
+                    })
+                    continue
                 }
             }
             return collisions
@@ -368,6 +359,9 @@
         function moveBallX() {
             const isInBricksZone = ball.y - ball.radius <= BRICKS_ROWS * BRICKS_HEIGHT
             const { ballRightX, ballLeftX } = getEverySide()
+
+            if (ball.x + BALL_RADIUS < 0) return console.log("ball is out left")
+            if (ball.x - BALL_RADIUS > $canvas.width) return console.log("ball is out right")
 
             if (ballRightX == paddle.x && isBallInVerticalPaddleRange()) {
                 ball.hDir = DIRECTIONS.LEFT
@@ -392,7 +386,19 @@
 
                 ball.x += hMovement
             } else if (ball.hDir === DIRECTIONS.LEFT) {
-                ball.x -= (ball.x - speed < 0 ? 0 : speed)
+                let collidingBrickIndex = bricks.findIndex(({ top, bottom, rigth, }) => {
+                    return ball.y >= top && ball.y <= bottom && (ball.x - speed) > right
+                })
+
+                if (ball.x - speed < 0 || collidingBrickIndex != -1) {
+                    hMovement = 0
+                }
+
+                if (collidingBrickIndex != -1) {
+                    bricks[collidingBrickIndex] = null
+                }
+
+                ball.x -= hMovement
             }
 
             if (ball.x + BALL_RADIUS > $canvas.width) {
@@ -415,9 +421,8 @@
             }
 
             if (ball.y - BALL_RADIUS > $canvas.height) return console.log("ball is out")
-            if (ball.x + BALL_RADIUS < 0) return console.log("ball is out")
-            if (ball.x - BALL_RADIUS > $canvas.width) return console.log("ball is out")
 
+            let vMovement = speed
             if (ball.vDir === DIRECTIONS.TOP) {
                 ball.y -= (ball.y - speed < 0) ? 0 : speed
             } else if (ball.vDir === DIRECTIONS.BOTTOM) {
