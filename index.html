@@ -251,30 +251,32 @@
                 }
             }
 
-            const collisions = getBrickCollisions()
-            if (collisions.length == 2) {
-                revertHorizontalDirection()
-                revertVerticalDirection()
-            } else if (collisions.length == 1) {
-                const { direction } = collisions[0]
-                if (direction == DIRECTIONS.BOTTOM) {
-                    ball.vDir = DIRECTIONS.TOP
-                } else if (direction == DIRECTIONS.TOP) {
-                    ball.vDir = DIRECTIONS.BOTTOM
-                } else if (direction == DIRECTIONS.RIGHT) {
-                    ball.hDir = DIRECTIONS.LEFT
-                } else if (direction == DIRECTIONS.LEFT) {
-                    ball.hDir = DIRECTIONS.RIGHT
-                }
-            } else if (collisions.length == 0) {
-                moveBallX(isHypothenuseSameAsRadius)
-                moveBallY(isHypothenuseSameAsRadius)
-                return
-            }
+            // const collisions = getBrickCollisions()
+            // if (collisions.length == 2) {
+            //     revertHorizontalDirection()
+            //     revertVerticalDirection()
+            // } else if (collisions.length == 1) {
+            //     const { direction } = collisions[0]
+            //     if (direction == DIRECTIONS.BOTTOM) {
+            //         ball.vDir = DIRECTIONS.TOP
+            //     } else if (direction == DIRECTIONS.TOP) {
+            //         ball.vDir = DIRECTIONS.BOTTOM
+            //     } else if (direction == DIRECTIONS.RIGHT) {
+            //         ball.hDir = DIRECTIONS.LEFT
+            //     } else if (direction == DIRECTIONS.LEFT) {
+            //         ball.hDir = DIRECTIONS.RIGHT
+            //     }
+            // } else if (collisions.length == 0) {
+            //     moveBallX(isHypothenuseSameAsRadius)
+            //     moveBallY(isHypothenuseSameAsRadius)
+            //     return
+            // }
+            // for (const { brickRow, brickCol } of collisions) {
+            //     bricks[brickRow][brickCol] = null
+            // }
 
-            for (const { brickRow, brickCol } of collisions) {
-                bricks[brickRow][brickCol] = null
-            }
+            moveBallX(isHypothenuseSameAsRadius)
+            moveBallY(isHypothenuseSameAsRadius)
         }
 
         function getOppositeDirection(direction) {
@@ -372,40 +374,50 @@
             }
 
             let hMovement = speed
+            let collidingBrickIndex = -1
             if (ball.hDir === DIRECTIONS.RIGHT) {
-                let collidingBrickIndex = bricks.findIndex(({ top, bottom, left }) => {
-                    return ball.y >= top && ball.y <= bottom && (ball.x + speed) > left
+                collidingBrickIndex = bricks.findIndex(brick => {
+                    if (brick == null) return false
+                    const { top, bottom, right, left } = brick
+                    return ball.y >= top
+                        && ball.y <= bottom
+                        && (ball.x + ball.radius + speed) <= left
+                        && (ball.x + ball.radius + speed) > right
                 })
-                if (ball.x + speed > $canvas.width || collidingBrickIndex != -1) {
+                if ((ball.x + ball.radius + speed) > $canvas.width || collidingBrickIndex != -1) {
                     hMovement = 0
-                }
-
-                if (collidingBrickIndex != -1) {
-                    bricks[collidingBrickIndex] = null
+                    ball.hDir = DIRECTIONS.LEFT
                 }
 
                 ball.x += hMovement
             } else if (ball.hDir === DIRECTIONS.LEFT) {
-                let collidingBrickIndex = bricks.findIndex(({ top, bottom, rigth, }) => {
-                    return ball.y >= top && ball.y <= bottom && (ball.x - speed) > right
+                collidingBrickIndex = bricks.findIndex(brick => {
+                    if (brick == null) return false
+                    const { top, bottom, right, left } = brick
+                    return ball.y >= top
+                        && ball.y <= bottom
+                        && (ball.x - ball.radius - speed) <= right
+                        && (ball.x - ball.radius - speed) > left
                 })
 
-                if (ball.x - speed < 0 || collidingBrickIndex != -1) {
+                if ((ball.x - ball.radius - speed) < 0 || collidingBrickIndex != -1) {
                     hMovement = 0
-                }
-
-                if (collidingBrickIndex != -1) {
-                    bricks[collidingBrickIndex] = null
+                    ball.hDir = DIRECTIONS.RIGHT
                 }
 
                 ball.x -= hMovement
             }
 
-            if (ball.x + BALL_RADIUS > $canvas.width) {
-                ball.hDir = DIRECTIONS.LEFT
-            } else if (ball.x - BALL_RADIUS < 0) {
-                ball.hDir = DIRECTIONS.RIGHT
+            if (collidingBrickIndex != -1) {
+                console.log("collidingBrickIndex != -1", bricks[collidingBrickIndex])
+                bricks[collidingBrickIndex] = null
             }
+
+            // if (ball.x + BALL_RADIUS > $canvas.width) {
+            //     ball.hDir = DIRECTIONS.LEFT
+            // } else if (ball.x - BALL_RADIUS < 0) {
+            //     ball.hDir = DIRECTIONS.RIGHT
+            // }
         }
 
         function moveBallY() {
@@ -423,15 +435,46 @@
             if (ball.y - BALL_RADIUS > $canvas.height) return console.log("ball is out")
 
             let vMovement = speed
+            let collidingBrickIndex = -1
             if (ball.vDir === DIRECTIONS.TOP) {
-                ball.y -= (ball.y - speed < 0) ? 0 : speed
+                collidingBrickIndex = bricks.findIndex(brick => {
+                    if (brick == null) return false
+                    const { top, right, bottom, left } = brick
+                    return ball.x >= left
+                        && ball.x <= right
+                        && (ball.y - ball.radius - speed) <= bottom
+                        && (ball.y - ball.radius - speed) > top
+                })
+                console.log("collidingBrickIndex", collidingBrickIndex)
+                if ((ball.y - ball.radius - speed) < 0 || collidingBrickIndex != -1) {
+                    vMovement = 0
+                    ball.vDir = DIRECTIONS.BOTTOM
+                }
+
+                ball.y -= vMovement
             } else if (ball.vDir === DIRECTIONS.BOTTOM) {
-                ball.y += speed // ball.y + speed > $canvas.height ? $canvas.height : speed
+                collidingBrickIndex = bricks.findIndex(brick => {
+                    if (brick == null) return false
+                    const { top, bottom, right, left } = brick
+                    return ball.x >= left
+                        && ball.x <= right
+                        && (ball.y + ball.radius + speed) >= top
+                        && (ball.y + ball.radius + speed) < bottom
+                })
+                if (collidingBrickIndex != -1) {
+                    vMovement = 0
+                    ball.vDir = DIRECTIONS.TOP
+                }
+                ball.y += vMovement // speed // ball.y + speed > $canvas.height ? $canvas.height : speed
             }
 
-            if (ball.y - BALL_RADIUS < 0) {
-                ball.vDir = DIRECTIONS.BOTTOM
+            if (collidingBrickIndex != -1) {
+                console.log("collidingBrickIndex != -1", bricks[collidingBrickIndex])
+                bricks[collidingBrickIndex] = null
             }
+            // if (ball.y - BALL_RADIUS < 0) {
+            //     ball.vDir = DIRECTIONS.BOTTOM
+            // }
         }
 
         document.addEventListener('keydown', () => {
@@ -462,7 +505,7 @@
                     return
                 }
                 if (mode === MODES.LIFE_LOST) {
-                    laodInitialState(false)
+                    loadInitialState(false)
                     draw()
                     return
                 }
@@ -503,7 +546,7 @@
             }
         }
 
-        function laodInitialState(resetLives = true) {
+        function loadInitialState(resetLives = true) {
             mode = MODES.NOT_STARTED
 
             paddle = {
@@ -538,11 +581,11 @@
                         height: BRICKS_HEIGHT,
                         bg: randomBg,
                         stroke: randomStroke,
-                        left: j * BRICKS_WIDTH + BRICKS_WIDTH,
-                        right: j * BRICKS_WIDTH,
-                        top: i * BRICKS_HEIGHT,
-                        bottom: i * BRICKS_HEIGHT + BRICKS_HEIGHT,
                     }
+                    brick["top"] = brick.y
+                    brick["right"] = brick.x + brick.width
+                    brick["bottom"] = brick.y + brick.height
+                    brick["left"] = brick.x
                     bricks.push(brick)
                 }
             }
@@ -558,7 +601,7 @@
         }
 
         function reset() {
-            laodInitialState()
+            loadInitialState()
             draw()
         }
 
